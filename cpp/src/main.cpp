@@ -202,6 +202,15 @@ int main(int argc, char* argv[])
 		FD_ZERO(&readfds);
 		FD_SET(ssh_get_fd(my_ssh_session), &readfds);
 		select(ssh_get_fd(my_ssh_session)+1,&readfds,0,0,0);
+
+		if (FD_ISSET(0, &readfds)) {
+			words = read(0, buf, MAX_BUF);
+			if (words) {
+				buf[words] = '\0';
+				buf[MAX_BUF] = '\0';
+				sendCommand(buf);
+			}
+		}
 		if(FD_ISSET(ssh_get_fd(my_ssh_session), &readfds)) {
 			ssh_set_fd_toread(my_ssh_session);
 		}
@@ -209,6 +218,30 @@ int main(int argc, char* argv[])
 	*/
 
 	while(my_ssh_channel && !ssh_channel_is_closed(my_ssh_channel)) {
+
+		std::cerr << "FD_ISSET prepare " << std::endl;
+		while(true) {
+			FD_ZERO(&readfds);
+			FD_SET(0, &readfds);
+			FD_SET(ssh_get_fd(my_ssh_session), &readfds);
+			select(ssh_get_fd(my_ssh_session)+1,&readfds,0,0,0);
+	
+			if (FD_ISSET(0, &readfds)) {
+				std::cerr << "FD_ISSET / stdin " << std::endl;
+				words = read(0, buf, MAX_BUF);
+				if (words) {
+					buf[words] = '\0';
+					buf[MAX_BUF] = '\0';
+					sendCommand(buf);
+				}
+				std::cerr << "STDIN:[" << buf << "]" << std::endl;
+			}
+			if(FD_ISSET(ssh_get_fd(my_ssh_session), &readfds)) {
+				std::cerr << "FD_ISSET / my_ssh_session " << std::endl;
+				break;
+			}
+		}
+
 		if (ssh_channel_poll(my_ssh_channel, 0) == 0) {
 			continue;
 		}
