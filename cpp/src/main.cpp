@@ -218,7 +218,6 @@ int main(int argc, char* argv[])
 	*/
 
 	while(my_ssh_channel && !ssh_channel_is_closed(my_ssh_channel)) {
-
 		std::cerr << "FD_ISSET prepare " << std::endl;
 		while(true) {
 			FD_ZERO(&readfds);
@@ -228,6 +227,12 @@ int main(int argc, char* argv[])
 	
 			if (FD_ISSET(0, &readfds)) {
 				std::cerr << "FD_ISSET / stdin " << std::endl;
+/*
+				char input = getchar(); 
+				std::string s(1, input);
+				std::cerr << "STDIN:[" << s << "]" << std::endl;
+				sendCommand(s);
+*/
 				words = read(0, buf, MAX_BUF);
 				if (words) {
 					buf[words] = '\0';
@@ -242,7 +247,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		if (ssh_channel_poll(my_ssh_channel, 0) == 0) {
+		if (ssh_channel_poll_timeout(my_ssh_channel, 1, 0) == 0) {
 			continue;
 		}
 		words = ssh_channel_read(my_ssh_channel, buf, MAX_BUF, 0);
@@ -291,12 +296,6 @@ int main(int argc, char* argv[])
 }
 
 void sendCommand(std::string data) {
-	static std::string prev;
-	if (prev.size()) {
-		if (prev == data && data == "q")
-			return;
-	}
-	prev = data;
 	if (my_ssh_channel)
 		ssh_channel_write(my_ssh_channel, data.c_str(), data.size());
 	else
