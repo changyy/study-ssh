@@ -8,9 +8,6 @@ import (
     "bufio"
     "golang.org/x/crypto/ssh"
     "golang.org/x/term"
-    "time"
-    "os/signal"
-    "syscall"
 )
 
 func init() {
@@ -29,9 +26,8 @@ func main() {
         }
     }()
 
-    quitChannel := make(chan os.Signal, 1)
-    signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
-    isQuit := false
+    quitConnection := make(chan int, 1)
+    quitMain := make(chan int, 1)
 
     go func() {
         host := "ptt.cc:22"
@@ -79,7 +75,7 @@ func main() {
                 r, _, _ := in.ReadRune()
                 if _, err := stdin.Write([]byte(string(r))); err != nil {
                     if err == io.EOF {
-                        isQuit = true
+                        quitConnection <- 1
                         break
                     } else {
                         log.Fatalln(err)
@@ -92,16 +88,9 @@ func main() {
             log.Panic(err)
         }
         session.Wait()
-        for {
-            time.Sleep(time.Second)
-            if isQuit {
-                break
-            }
-        }
-
-        quitChannel <- syscall.SIGINT
+        <- quitConnection
+        quitMain <- 1
     }()
 
-    <-quitChannel
-    fmt.Println("Done")
+    <- quitMain
 }
