@@ -4,7 +4,10 @@ import (
     "fmt"
     "log"
     "os"
+    "io"
+    "bufio"
     "golang.org/x/crypto/ssh"
+    "golang.org/x/term"
     "time"
     "os/signal"
     "syscall"
@@ -16,6 +19,19 @@ func init() {
 }
 
 func main() {
+    state, err := term.MakeRaw(0)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    defer func() {
+        if err := term.Restore(0, state) ; err != nil {
+            fmt.Println("term.Restore error: ", err)
+        }
+    }()
+
+    quitChannel := make(chan os.Signal, 1)
+    signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
+    isQuit := false
 
     go func() {
         host := "ptt.cc:22"
@@ -50,19 +66,42 @@ func main() {
     
         session.Stdout = os.Stdout
         session.Stderr = os.Stderr
-        session.Stdin = os.Stdin
+        stdin, err := session.StdinPipe()
+        if err != nil {
+            log.Fatalln(err)
+        }
+        defer stdin.Close()
+
+        //session.Stdin = os.Stdin
+        go func() {
+            in := bufio.NewReader(os.Stdin)
+            for {
+                r, _, _ := in.ReadRune()
+                if _, err := stdin.Write([]byte(string(r))); err != nil {
+                    if err == io.EOF {
+                        isQuit = true
+                        break
+                    } else {
+                        log.Fatalln(err)
+                    }
+                }
+            }
+        }()
 
         if err := session.Shell(); err != nil {
             log.Panic(err)
         }
         session.Wait()
         for {
-            time.Sleep(time.Second * 1)
+            time.Sleep(time.Second)
+            if isQuit {
+                break
+            }
         }
+
+        quitChannel <- syscall.SIGINT
     }()
 
-    quitChannel := make(chan os.Signal, 1)
-    signal.Notify(quitChannel, syscall.SIGINT, syscall.SIGTERM)
     <-quitChannel
     fmt.Println("Done")
 }
